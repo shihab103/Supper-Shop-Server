@@ -1,10 +1,9 @@
-const { MongoClient, ServerApiVersion } = require('mongodb');
-const express = require('express');
-require('dotenv').config();
-const cors = require('cors');
+const { MongoClient, ServerApiVersion } = require("mongodb");
+const express = require("express");
+require("dotenv").config();
+const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 3000;
-
 
 // middleware
 app.use(cors());
@@ -18,7 +17,7 @@ const client = new MongoClient(`${process.env.MONGODB_URI}`, {
     version: ServerApiVersion.v1,
     strict: true,
     deprecationErrors: true,
-  }
+  },
 });
 
 async function run() {
@@ -27,39 +26,41 @@ async function run() {
     await client.connect();
 
     // operation start
-    
-    
+    const db = client.db("SupperShop");
+    const userCollection = db.collection("users");
+    const categoryCollection = db.collection('category');
 
+    // add category
+    app.post("/add-category", async (req, res) => {
+      const categoryData = req.body;
+      const result = await categoryCollection.insertOne(categoryData);
+      res.send(result)
+    });
 
-
-
-
-
-
-
-
-
-
-
-
+    // get category
+    app.get('/get-category',async(req,res)=>{
+      const allCategory = await categoryCollection.find().toArray();
+      res.send(allCategory);
+    })
 
     // operation end
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    console.log(
+      "Pinged your deployment. You successfully connected to MongoDB!"
+    );
   } finally {
     // Ensures that the client will close when you finish/error
-    await client.close();
+    // await client.close();
   }
 }
 run().catch(console.dir);
 
+app.get("/", (req, res) => {
+  res.send("Hello world");
+});
 
-app.get('/',(req,res)=>{
-    res.send('Hello world');
-})
-
-app.listen(port,(req,res)=>{
-    console.log(`Server running on port ${port}`);
-})
+app.listen(port, (req, res) => {
+  console.log(`Server running on port ${port}`);
+});
