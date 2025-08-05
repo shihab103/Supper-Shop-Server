@@ -28,19 +28,34 @@ async function run() {
     // operation start
     const db = client.db("SupperShop");
     const userCollection = db.collection("users");
-    const categoryCollection = db.collection('category');
+    const categoryCollection = db.collection("category");
+    const productCollection = db.collection("products");
 
     // add category
     app.post("/add-category", async (req, res) => {
       const categoryData = req.body;
       const result = await categoryCollection.insertOne(categoryData);
-      res.send(result)
+      res.send(result);
     });
 
     // get category
-    app.get('/get-category',async(req,res)=>{
+    app.get("/get-category", async (req, res) => {
       const allCategory = await categoryCollection.find().toArray();
       res.send(allCategory);
+    });
+
+    // add product
+    app.post("/add-product", async (req, res) => {
+      const product = req.body;
+      product.createdAt = new Date();
+      const result = await productCollection.insertOne(product);
+      res.send(result);
+    });
+
+    // all product
+    app.get('/all-products',async(req,res)=>{
+      const allProduct = await productCollection.find().toArray();
+      res.send(allProduct)
     })
 
     // operation end
