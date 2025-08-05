@@ -53,10 +53,22 @@ async function run() {
     });
 
     // all product
-    app.get('/all-products',async(req,res)=>{
+    app.get("/all-products", async (req, res) => {
       const allProduct = await productCollection.find().toArray();
-      res.send(allProduct)
-    })
+      res.send(allProduct);
+    });
+
+    // GET products by category ID
+    app.get("/products-by-category/:categoryId", async (req, res) => {
+      const { categoryId } = req.params;
+      try {
+        const products = await productCollection.find({ categoryId }).toArray();
+        res.send(products);
+      } catch (error) {
+        console.error("Error fetching products by category ID:", error);
+        res.status(500).send({ error: "Something went wrong" });
+      }
+    });
 
     // operation end
 
