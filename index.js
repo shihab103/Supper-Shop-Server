@@ -30,6 +30,73 @@ async function run() {
     const userCollection = db.collection("users");
     const categoryCollection = db.collection("category");
     const productCollection = db.collection("products");
+    // Add product to wishlist
+    app.post("/wishlist-by-email", async (req, res) => {
+      const { email, productId } = req.body;
+      if (!email || !productId)
+        return res.status(400).send({ error: "Missing email or productId" });
+
+      try {
+        const user = await userCollection.findOne({ email });
+        if (!user) return res.status(404).send({ error: "User not found" });
+
+        const result = await userCollection.updateOne(
+          { email },
+          { $addToSet: { wishlist: productId } } // duplicate এড়াবে
+        );
+        res.send({ success: true, result });
+      } catch (error) {
+        console.error(error);
+        res
+          .status(500)
+          .send({ success: false, message: "Failed to add to wishlist" });
+      }
+    });
+
+    // Remove product from wishlist
+    app.delete("/wishlist-by-email", async (req, res) => {
+      const { email, productId } = req.body;
+
+      if (!email || !productId) {
+        return res.status(400).send({ error: "Missing email or productId" });
+      }
+
+      try {
+        const result = await userCollection.updateOne(
+          { email },
+          { $pull: { wishlist: productId } }
+        );
+        res.send({ success: true, result });
+      } catch (error) {
+        console.error(error);
+        res
+          .status(500)
+          .send({ success: false, message: "Failed to remove from wishlist" });
+      }
+    });
+
+    app.get("/wishlist-by-email/:email", async (req, res) => {
+      const { email } = req.params;
+      try {
+        const user = await userCollection.findOne(
+          { email },
+          { projection: { wishlist: 1 } }
+        );
+
+        if (!user || !user.wishlist?.length) return res.send([]);
+
+        const products = await productCollection
+          .find({ _id: { $in: user.wishlist.map((id) => new ObjectId(id)) } })
+          .toArray();
+
+        res.send(products);
+      } catch (error) {
+        console.error(error);
+        res
+          .status(500)
+          .send({ success: false, message: "Failed to fetch wishlist" });
+      }
+    });
 
     // add category
     app.post("/add-category", async (req, res) => {
@@ -60,17 +127,17 @@ async function run() {
 
     // product details page
 
-    app.get('/product/:id',async(req,res)=>{
-      const {id} = req.params;
-      try{
-        const product = await productCollection.findOne({_id:new ObjectId(id)});
+    app.get("/product/:id", async (req, res) => {
+      const { id } = req.params;
+      try {
+        const product = await productCollection.findOne({
+          _id: new ObjectId(id),
+        });
         res.send(product);
+      } catch (error) {
+        res.status(500).send({ error: "Product not found" });
       }
-      catch(error){
-        res.status(500).send({error:"Product not found"});
-      }
-    })
-
+    });
 
     // GET products by category ID
     app.get("/products-by-category/:categoryId", async (req, res) => {
