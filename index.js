@@ -4,13 +4,40 @@ require("dotenv").config();
 const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 3000;
+const admin = require("firebase-admin");
+const fs = require("fs");
+
+// Firebase Admin Init
+const serviceAccount = JSON.parse(
+  fs.readFileSync("./admin-key.json", "utf8")
+);
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 // middleware
 app.use(cors());
 app.use(express.json());
 
-// db drives
+// Firebase Token Verification Middleware
+const verifyFirebaseToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Unauthorized: No token provided" });
+  }
 
+  const idToken = authHeader.split(" ")[1];
+
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    req.firebaseUser = decodedToken;
+    next();
+  } catch (error) {
+    console.error("Firebase Token Verification Failed:", error.message);
+    return res.status(401).json({ message: "Unauthorized: Invalid or expired token" });
+  }
+};
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(`${process.env.MONGODB_URI}`, {
   serverApi: {
@@ -30,6 +57,89 @@ async function run() {
     const userCollection = db.collection("users");
     const categoryCollection = db.collection("category");
     const productCollection = db.collection("products");
+
+    // Get user by email
+    app.get("/user/:email", async (req, res) => {
+      const email = req.params.email;
+      try {
+        const user = await userCollection.findOne({ email });
+        if (!user) {
+          return res.status(404).send({ message: "User not found" });
+        }
+        res.send(user);
+      } catch (error) {
+        res.status(500).send({ message: "Server error", error: error.message });
+      }
+    });
+
+    // Update user profile
+    app.put("/user/:email", async (req, res) => {
+      const email = req.params.email;
+      const updatedData = req.body;
+      try {
+        const result = await userCollection.updateOne(
+          { email },
+          { $set: updatedData },
+          { upsert: false }
+        );
+        if (result.matchedCount === 0) {
+          return res.status(404).send({ message: "User not found" });
+        }
+        res.send({ message: "Profile updated successfully" });
+      } catch (error) {
+        res.status(500).send({ message: "Server error", error: error.message });
+      }
+    });
+
+    // get single user by email
+    app.get("/user/:email", async (req, res) => {
+      const { email } = req.params;
+      try {
+        const user = await userCollection.findOne({ email });
+        if (!user) {
+          return res.status(404).send({ error: "User not found" });
+        }
+        res.send(user);
+      } catch (error) {
+        console.error("Error fetching user:", error);
+        res.status(500).send({ error: "Something went wrong" });
+      }
+    });
+
+    // update user by email
+    app.put("/update-user/:email", async (req, res) => {
+      const { email } = req.params;
+      const updateData = req.body;
+
+      try {
+        const result = await userCollection.updateOne(
+          { email },
+          { $set: updateData },
+          { upsert: true } // user না থাকলে create করবে
+        );
+        res.send(result);
+      } catch (error) {
+        console.error("Error updating user:", error);
+        res.status(500).send({ error: "Something went wrong" });
+      }
+    });
+
+    // add user (during registration)
+    app.post("/add-user", async (req, res) => {
+      const user = req.body;
+      try {
+        const existing = await userCollection.findOne({ email: user.email });
+        if (existing) {
+          return res.send({ message: "User already exists" });
+        }
+        const result = await userCollection.insertOne(user);
+        res.send(result);
+      } catch (error) {
+        console.error("Error adding user:", error);
+        res.status(500).send({ error: "Something went wrong" });
+      }
+    });
+
     // Add product to wishlist
     app.post("/wishlist-by-email", async (req, res) => {
       const { email, productId } = req.body;
@@ -115,6 +225,9 @@ async function run() {
     app.post("/add-product", async (req, res) => {
       const product = req.body;
       product.createdAt = new Date();
+      if (product.expiryDate) {
+        product.expiryDate = new Date(product.expiryDate);
+      }
       const result = await productCollection.insertOne(product);
       res.send(result);
     });
