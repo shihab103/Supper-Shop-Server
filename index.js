@@ -8,9 +8,7 @@ const admin = require("firebase-admin");
 const fs = require("fs");
 
 // Firebase Admin Init
-const serviceAccount = JSON.parse(
-  fs.readFileSync("./admin-key.json", "utf8")
-);
+const serviceAccount = JSON.parse(fs.readFileSync("./admin-key.json", "utf8"));
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -35,7 +33,9 @@ const verifyFirebaseToken = async (req, res, next) => {
     next();
   } catch (error) {
     console.error("Firebase Token Verification Failed:", error.message);
-    return res.status(401).json({ message: "Unauthorized: Invalid or expired token" });
+    return res
+      .status(401)
+      .json({ message: "Unauthorized: Invalid or expired token" });
   }
 };
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -57,6 +57,22 @@ async function run() {
     const userCollection = db.collection("users");
     const categoryCollection = db.collection("category");
     const productCollection = db.collection("products");
+    const reviewCollection = db.collection("review");
+
+    // Get reviews by product
+    app.get("/reviews/:productId", async (req, res) => {
+      const result = await reviewCollection
+        .find({ productId: req.params.productId })
+        .toArray();
+      res.send(result);
+    });
+
+    // Post review
+    app.post("/reviews", async (req, res) => {
+      const review = req.body;
+      const result = await reviewCollection.insertOne(review);
+      res.send(result);
+    });
 
     // Get user by email
     app.get("/user/:email", async (req, res) => {
@@ -91,6 +107,27 @@ async function run() {
       }
     });
 
+    // get user role
+    app.get("/get-user-role", verifyFirebaseToken, async (req, res) => {
+      try {
+        const email = req.firebaseUser?.email;
+
+        if (!email) {
+          return res.status(400).send({ message: "Invalid user" });
+        }
+
+        const user = await userCollection.findOne({ email });
+        if (!user) {
+          return res.status(404).send({ message: "User not found" });
+        }
+
+        res.send({ message: "ok", role: user.role });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ message: "Something went wrong" });
+      }
+    });
+
     // get single user by email
     app.get("/user/:email", async (req, res) => {
       const { email } = req.params;
@@ -115,7 +152,7 @@ async function run() {
         const result = await userCollection.updateOne(
           { email },
           { $set: updateData },
-          { upsert: true } // user না থাকলে create করবে
+          { upsert: true }
         );
         res.send(result);
       } catch (error) {
@@ -152,7 +189,7 @@ async function run() {
 
         const result = await userCollection.updateOne(
           { email },
-          { $addToSet: { wishlist: productId } } // duplicate এড়াবে
+          { $addToSet: { wishlist: productId } }
         );
         res.send({ success: true, result });
       } catch (error) {
