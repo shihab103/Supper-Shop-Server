@@ -59,6 +59,34 @@ async function run() {
     const productCollection = db.collection("products");
     const reviewCollection = db.collection("review");
 
+    // get all review
+    app.get("/all-review", verifyFirebaseToken, async (req, res) => {
+      const result = await reviewCollection.find().toArray();
+      res.send(result);
+    });
+
+    // Delete a review
+    app.delete("/review/:id", async (req, res) => {
+      const id = req.params.id;
+
+      try {
+        const result = await reviewCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        if (result.deletedCount === 1) {
+          res.send({ success: true, message: "Review deleted successfully" });
+        } else {
+          res.status(404).send({ success: false, message: "Review not found" });
+        }
+      } catch (error) {
+        console.error("Error deleting review:", error);
+        res
+          .status(500)
+          .send({ success: false, message: "Internal server error" });
+      }
+    });
+
     // Get reviews by product
     app.get("/reviews/:productId", async (req, res) => {
       const result = await reviewCollection
