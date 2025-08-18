@@ -58,6 +58,22 @@ async function run() {
     const categoryCollection = db.collection("category");
     const productCollection = db.collection("products");
     const reviewCollection = db.collection("review");
+    const cartCollection = db.collection("cart");
+
+    // Add to Cart (POST)
+    app.post("/add-to-cart", async (req, res) => {
+      const cartItem = req.body;
+      cartItem.date = new Date();
+      const result = await cartCollection.insertOne(cartItem);
+      res.send(result);
+    });
+
+    // Get Cart by User (GET)
+    app.get("/cart/:userId", async (req, res) => {
+      const userId = req.params.userId;
+      const result = await cartCollection.find({ userId: userId }).toArray();
+      res.send(result);
+    });
 
     // get all review
     app.get("/all-review", verifyFirebaseToken, async (req, res) => {
