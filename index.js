@@ -5,10 +5,10 @@ const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 3000;
 const admin = require("firebase-admin");
-const fs = require("fs");
 
 // Firebase Admin Init
-const serviceAccount = JSON.parse(fs.readFileSync("./admin-key.json", "utf8"));
+const decodedKey = Buffer.from(`./admin-key.json`,'base64').toString('utf8');
+const serviceAccount = JSON.parse(decodedKey);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -50,7 +50,7 @@ const client = new MongoClient(`${process.env.MONGODB_URI}`, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
     // operation start
     const db = client.db("SupperShop");
@@ -68,11 +68,24 @@ async function run() {
       res.send(result);
     });
 
-    // Get Cart by User (GET)
+    // Get specific user cart by MongoDB userId
     app.get("/cart/:userId", async (req, res) => {
-      const userId = req.params.userId;
-      const result = await cartCollection.find({ userId: userId }).toArray();
-      res.send(result);
+      try {
+        const userId = req.params.userId;
+
+        // Ensure user exists
+        const user = await userCollection.findOne({
+          _id: new ObjectId(userId),
+        });
+        if (!user) return res.status(404).send({ message: "User not found" });
+
+        // Fetch cart for this user
+        const cart = await cartCollection.find({ userId: userId }).toArray();
+        res.send(cart);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ message: "Failed to fetch cart" });
+      }
     });
 
     // get all review
@@ -348,10 +361,10 @@ async function run() {
     // operation end
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
