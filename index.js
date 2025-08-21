@@ -7,7 +7,10 @@ const port = process.env.PORT || 3000;
 const admin = require("firebase-admin");
 
 // Firebase Admin Init
-const decodedKey = Buffer.from(`./admin-key.json`,'base64').toString('utf8');
+const decodedKey = Buffer.from(
+  process.env.FIREBASE_SERVICE_ACCOUNT_KEY_BASE64,
+  "base64"
+).toString("utf8");
 const serviceAccount = JSON.parse(decodedKey);
 
 admin.initializeApp({
@@ -68,23 +71,47 @@ async function run() {
       res.send(result);
     });
 
-    // Get specific user cart by MongoDB userId
-    app.get("/cart/:userId", async (req, res) => {
+    // get all cart product
+    app.get("/all-cart", async (req, res) => {
+      const result = await cartCollection.find().toArray();
+      res.send(result);
+    });
+
+    // GET /cart?email=user@gmail.com
+    app.get("/cart", async (req, res) => {
+      const { email } = req.query;
+      if (!email) return res.status(400).send({ error: "Email required" });
+
       try {
-        const userId = req.params.userId;
-
-        // Ensure user exists
-        const user = await userCollection.findOne({
-          _id: new ObjectId(userId),
-        });
-        if (!user) return res.status(404).send({ message: "User not found" });
-
-        // Fetch cart for this user
-        const cart = await cartCollection.find({ userId: userId }).toArray();
-        res.send(cart);
+        const cartItems = await cartCollection
+          .find({ userEmail: email })
+          .toArray();
+        res.send(cartItems);
       } catch (err) {
         console.error(err);
-        res.status(500).send({ message: "Failed to fetch cart" });
+        res.status(500).send({ error: "Failed to fetch cart" });
+      }
+    });
+
+    // Delete cart item by _id
+    router.delete("/cart/:itemId", async (req, res) => {
+      const { itemId } = req.params;
+
+      if (!itemId) return res.status(400).send({ error: "Item ID required" });
+
+      try {
+        const result = await cartCollection.deleteOne({
+          _id: new ObjectId(itemId),
+        });
+
+        if (result.deletedCount === 1) {
+          res.send({ message: "Item removed successfully" });
+        } else {
+          res.status(404).send({ error: "Item not found" });
+        }
+      } catch (err) {
+        console.error("Cart remove error:", err);
+        res.status(500).send({ error: "Failed to remove item" });
       }
     });
 
