@@ -63,6 +63,34 @@ async function run() {
     const reviewCollection = db.collection("review");
     const cartCollection = db.collection("cart");
 
+    // Dashboard stats
+    app.get("/admin-dashboard-stats", async (req, res) => {
+      try {
+        const totalUsers = await userCollection.countDocuments();
+        const totalProducts = await productCollection.countDocuments();
+        const totalCategories = await categoryCollection.countDocuments();
+        const totalOrders = await cartCollection.countDocuments();
+        const totalReviews = await reviewCollection.countDocuments();
+
+        // Category wise product count
+        const categoryStats = await productCollection
+          .aggregate([{ $group: { _id: "$categoryId", count: { $sum: 1 } } }])
+          .toArray();
+
+        res.send({
+          totalUsers,
+          totalProducts,
+          totalCategories,
+          totalOrders,
+          totalReviews,
+          categoryStats,
+        });
+      } catch (error) {
+        console.error("Dashboard stats error:", error);
+        res.status(500).send({ error: "Failed to fetch dashboard stats" });
+      }
+    });
+
     // Add to Cart (POST)
     app.post("/add-to-cart", async (req, res) => {
       const cartItem = req.body;
@@ -94,7 +122,7 @@ async function run() {
     });
 
     // Delete cart item by _id
-    router.delete("/cart/:itemId", async (req, res) => {
+    app.delete("/cart/:itemId", async (req, res) => {
       const { itemId } = req.params;
 
       if (!itemId) return res.status(400).send({ error: "Item ID required" });
