@@ -200,6 +200,12 @@ async function run() {
       }
     });
 
+    // get all user
+    app.get('/all-user',async(req,res)=>{
+      const user = await userCollection.find().toArray();
+      res.send(user);
+    })
+
     // Update user profile
     app.put("/user/:email", async (req, res) => {
       const email = req.params.email;
