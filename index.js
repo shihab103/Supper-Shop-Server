@@ -62,6 +62,80 @@ async function run() {
     const productCollection = db.collection("products");
     const reviewCollection = db.collection("review");
     const cartCollection = db.collection("cart");
+    const orderCollection = db.collection("orders");
+
+    // all-orders
+
+    app.get('/all-orders',async(req,res)=>{
+      const result = await orderCollection.find().toArray();
+      res.send(result);
+    })
+
+    // Checkout API
+    app.post("/checkout", async (req, res) => {
+      const { email } = req.body;
+      if (!email) return res.status(400).send({ error: "Email is required" });
+
+      try {
+        // Step 1: Get cart items of this user
+        const cartItems = await cartCollection
+          .find({ userEmail: email })
+          .toArray();
+        if (!cartItems.length) {
+          return res.status(400).send({ error: "Cart is empty" });
+        }
+
+        // Step 2: Get user info
+        const user = await userCollection.findOne({ email });
+        if (!user) {
+          return res.status(404).send({ error: "User not found" });
+        }
+
+        // Step 3: Calculate total
+        const totalAmount = cartItems.reduce(
+          (sum, item) => sum + item.price * item.quantity,
+          0
+        );
+
+        // Step 4: Prepare order
+        const order = {
+          userId: user._id,
+          userEmail: user.email,
+          customerName: user.name,
+          phone: user.phone,
+          billingAddress: user.billingAddress,
+          items: cartItems.map((item) => ({
+            productId: item.productId,
+            productName: item.productName,
+            productImage: item.productImage,
+            price: item.price,
+            quantity: item.quantity,
+          })),
+          totalAmount,
+          status: "pending",
+          orderDate: new Date(),
+        };
+
+        // Step 5: Save order
+        const orderResult = await orderCollection.insertOne(order);
+
+        // Step 6: Update stock
+        for (const item of cartItems) {
+          await productCollection.updateOne(
+            { _id: new ObjectId(item.productId) },
+            { $inc: { stock: -item.quantity } }
+          );
+        }
+
+        // Step 7: Clear cart
+        await cartCollection.deleteMany({ userEmail: email });
+
+        res.send({ success: true, orderId: orderResult.insertedId });
+      } catch (error) {
+        console.error("Checkout error:", error);
+        res.status(500).send({ error: "Failed to complete checkout" });
+      }
+    });
 
     // Dashboard stats
     app.get("/admin-dashboard-stats", async (req, res) => {
@@ -201,10 +275,10 @@ async function run() {
     });
 
     // get all user
-    app.get('/all-user',async(req,res)=>{
+    app.get("/all-user", async (req, res) => {
       const user = await userCollection.find().toArray();
       res.send(user);
-    })
+    });
 
     // Update user profile
     app.put("/user/:email", async (req, res) => {
