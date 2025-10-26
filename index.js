@@ -1,17 +1,21 @@
+
+require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const express = require("express");
-require("dotenv").config();
 const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 3000;
 const admin = require("firebase-admin");
+const { GoogleGenAI } = require("@google/genai");
 
 // Firebase Admin Init
 const decodedKey = Buffer.from(
   process.env.FIREBASE_SERVICE_ACCOUNT_KEY_BASE64,
   "base64"
 ).toString("utf8");
+
 const serviceAccount = JSON.parse(decodedKey);
+
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -20,6 +24,9 @@ admin.initializeApp({
 // middleware
 app.use(cors());
 app.use(express.json());
+
+const aiRoutes = require("./Routes/aiRoutes");
+app.use("/api/ai", aiRoutes);
 
 // Firebase Token Verification Middleware
 const verifyFirebaseToken = async (req, res, next) => {
@@ -49,6 +56,8 @@ const client = new MongoClient(`${process.env.MONGODB_URI}`, {
     deprecationErrors: true,
   },
 });
+
+console.log(process.env.MONGODB_URI);
 
 async function run() {
   try {
