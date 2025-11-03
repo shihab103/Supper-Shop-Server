@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const express = require("express");
@@ -15,7 +14,6 @@ const decodedKey = Buffer.from(
 ).toString("utf8");
 
 const serviceAccount = JSON.parse(decodedKey);
-
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -73,12 +71,95 @@ async function run() {
     const cartCollection = db.collection("cart");
     const orderCollection = db.collection("orders");
 
+    // discount
+    app.put("/product/:id/discount", async (req, res) => {
+      const { id } = req.params;
+      const { discount } = req.body;
+
+      if (typeof discount === "undefined" || isNaN(discount)) {
+        return res.status(400).json({ error: "Invalid discount value" });
+      }
+
+      try {
+        const existingProduct = await productCollection.findOne({
+          _id: new ObjectId(id),
+        });
+        if (!existingProduct) {
+          return res.status(404).json({ error: "Product not found" });
+        }
+
+        const originalPrice = existingProduct.price;
+        const newDiscount = Number(discount);
+
+        const calculatedFinalPrice =
+          originalPrice - (newDiscount * originalPrice) / 100;
+
+        const updateResult = await productCollection.findOneAndUpdate(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              discount: newDiscount,
+              finalPrice: calculatedFinalPrice,
+            },
+          },
+          { returnDocument: "after" }
+        );
+
+        if (!updateResult.value) {
+          return res
+            .status(404)
+            .json({ error: "Product not found after update" });
+        }
+
+        res.json(updateResult.value);
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to update discount" });
+      }
+    });
+
     // all-orders
 
-    app.get('/all-orders',async(req,res)=>{
+    app.get("/all-orders", async (req, res) => {
       const result = await orderCollection.find().toArray();
       res.send(result);
-    })
+    });
+
+    // Delete a product by ID
+    app.delete("/product/:id", async (req, res) => {
+      const { id } = req.params;
+
+      if (!id) return res.status(400).send({ error: "Product ID is required" });
+
+      try {
+        // Delete the product from products collection
+        const result = await productCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        if (result.deletedCount === 1) {
+          // Optionally, remove this product from all users' wishlists
+          await userCollection.updateMany(
+            { wishlist: id },
+            { $pull: { wishlist: id } }
+          );
+
+          // Optionally, remove this product from all carts
+          await cartCollection.deleteMany({ productId: id });
+
+          res.send({ success: true, message: "Product deleted successfully" });
+        } else {
+          res
+            .status(404)
+            .send({ success: false, message: "Product not found" });
+        }
+      } catch (error) {
+        console.error("Error deleting product:", error);
+        res
+          .status(500)
+          .send({ success: false, message: "Internal server error" });
+      }
+    });
 
     // Checkout API
     app.post("/checkout", async (req, res) => {
