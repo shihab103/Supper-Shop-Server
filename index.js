@@ -71,6 +71,67 @@ async function run() {
     const cartCollection = db.collection("cart");
     const orderCollection = db.collection("orders");
 
+    // top product
+
+    app.get("/top-selling-products", async (req, res) => {
+      try {
+        const topProducts = await orderCollection
+          .aggregate([
+            { $unwind: "$items" },
+            {
+              $group: {
+                _id: "$items.productId",
+                productName: { $first: "$items.productName" },
+                productImage: { $first: "$items.productImage" },
+                totalSold: { $sum: "$items.quantity" },
+                totalRevenue: {
+                  $sum: { $multiply: ["$items.price", "$items.quantity"] },
+                },
+              },
+            },
+            { $sort: { totalSold: -1 } },
+            { $limit: 10 },
+          ])
+          .toArray();
+
+        res.status(200).json(topProducts);
+      } catch (error) {
+        console.error("Aggregation error:", error);
+        res.status(500).json({
+          message: "Error fetching top selling products",
+          error,
+        });
+      }
+    });
+
+    // GET top-selling-products
+    app.get("/top-selling-products", async (req, res) => {
+      try {
+        const topProducts = await Order.aggregate([
+          { $unwind: "$items" },
+          {
+            $group: {
+              _id: "$items.productId",
+              productName: { $first: "$items.productName" },
+              productImage: { $first: "$items.productImage" },
+              totalSold: { $sum: "$items.quantity" },
+              totalRevenue: {
+                $sum: { $multiply: ["$items.price", "$items.quantity"] },
+              },
+            },
+          },
+          { $sort: { totalSold: -1 } },
+          { $limit: 5 },
+        ]);
+
+        res.status(200).json(topProducts);
+      } catch (error) {
+        res
+          .status(500)
+          .json({ message: "Error fetching top selling products", error });
+      }
+    });
+
     // discount
     app.put("/product/:id/discount", async (req, res) => {
       const { id } = req.params;
@@ -118,11 +179,69 @@ async function run() {
       }
     });
 
+    // get discount product
+
+    app.get("/discount", async (req, res) => {
+      const result = await productCollection
+        .find({
+          discount: { $gt: 0 },
+        })
+        .toArray();
+      res.send(result);
+    });
+
     // all-orders
 
     app.get("/all-orders", async (req, res) => {
       const result = await orderCollection.find().toArray();
       res.send(result);
+    });
+
+    // my-orders
+
+    app.get("/my-orders/:email", async (req, res) => {
+      const email = req.params.email;
+
+      const result = await orderCollection.find({ userEmail: email }).toArray();
+
+      res.send(result);
+    });
+
+    // order status
+
+    app.patch("/update-order-status/:id", async (req, res) => {
+      const id = req.params.id;
+      const { status } = req.body;
+
+      try {
+        const result = await orderCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status } }
+        );
+
+        res.send({ success: true });
+      } catch (error) {
+        res
+          .status(500)
+          .send({ success: false, message: "Failed to update order" });
+      }
+    });
+
+    app.patch("/cancel-order/:id", async (req, res) => {
+      const id = req.params.id;
+
+      try {
+        const result = await orderCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status: "cancelled" } }
+        );
+
+        res.send({ success: true });
+      } catch (error) {
+        res
+          .status(500)
+          .send({ success: false, message: "Failed to cancel order" });
+      }
     });
 
     // Delete a product by ID
